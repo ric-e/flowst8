@@ -14,15 +14,3 @@ if not api_key:
     raise RuntimeError("GOOGLE_API_KEY is not set")
 
 client = genai.Client(api_key=api_key)
-
-while running:
-    prompt = input("Enter a prompt to Gemini (or 'quit' to exit): ")
-
-    if prompt.lower() == "quit":
-        running = False
-    print("\n")
-    print("Thinking...")
-    response = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
-    print("\n")
-    print(response.text)
-    print("\n")

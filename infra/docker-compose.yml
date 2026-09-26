@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: timescale/timescaledb:latest-pg16
     container_name: flowst8-postgres
     restart: unless-stopped
     environment:
@@ -35,24 +35,6 @@ services:
     networks:
       - flowst8
 
-  mqtt:
-    image: eclipse-mosquitto:2
-    container_name: flowst8-mqtt
-    restart: unless-stopped
-    ports:
-      - "${MQTT_PORT:-1883}:1883"
-      - "${MQTT_WS_PORT:-9001}:9001"
-    volumes:
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
-    healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$$SYS/#' -C 1 -W 3 >/dev/null 2>&1 || exit 1"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-    networks:
-      - flowst8
-
 networks:
   flowst8:
     name: flowst8-network
@@ -60,5 +42,3 @@ networks:
 volumes:
   postgres_data:
   redis_data:
-  mosquitto_data:
-  mosquitto_log:
