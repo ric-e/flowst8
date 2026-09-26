@@ -2,6 +2,9 @@
 
 flowst8 is a prototype “proof of flow” system for measuring developer focus, health signals, and desktop behavior, then turning that data into a live dashboard and intervention loop. The repo stitches together a telemetry dashboard, a Python data-validation backend, a VS Code extension, a local Pi agent, and the supporting infrastructure for MQTT, Postgres, and Redis.
 
+ELI5:
+We built a focus tracker webapp that rewards users with currency from the blockchain.
+
 This project is structured like a small product stack rather than a single app:
 
 - The main dashboard lives in `frontend is a social construct/`.
