@@ -50,12 +50,34 @@ class FlowRuntimeState:
         self.heart_rate_bpm = 72
         self.flow_seconds_by_session: dict[str, int] = {}
         self.last_bounty_by_session: dict[str, int] = {}
+        self.latest_keystroke_metrics_by_session: dict[str, tuple[float, float]] = {}
 
     def _iso_now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
     def update_heart_rate(self, bpm: int):
         self.heart_rate_bpm = bpm
+
+    def register_session(self, session_id: str):
+        self.latest_keystroke_metrics_by_session.setdefault(session_id, (0.0, 0.0))
+
+    def update_keystroke_metrics(
+        self,
+        session_id: str,
+        keystrokes_per_min: float,
+        backspace_ratio: float,
+    ):
+        self.latest_keystroke_metrics_by_session[session_id] = (
+            keystrokes_per_min,
+            backspace_ratio,
+        )
+
+    def telemetry_sessions(self) -> list[str]:
+        sessions = list(self.latest_keystroke_metrics_by_session.keys())
+        return sessions if sessions else ["pulsoid_live"]
+
+    def latest_keystroke_metrics(self, session_id: str) -> tuple[float, float]:
+        return self.latest_keystroke_metrics_by_session.get(session_id, (0.0, 0.0))
 
     def build_telemetry_tick(
         self,
@@ -149,6 +171,15 @@ async def stream_pulsoid_heart_rate(token: str):
         bpm = event.get("data", {}).get("bpm")
         if isinstance(bpm, (int, float)):
             runtime_state.update_heart_rate(int(bpm))
+            for session_id in runtime_state.telemetry_sessions():
+                kpm, backspace_ratio = runtime_state.latest_keystroke_metrics(session_id)
+                await dashboard_connections.broadcast(
+                    runtime_state.build_telemetry_tick(
+                        session_id=session_id,
+                        keystrokes_per_min=kpm,
+                        backspace_ratio=backspace_ratio,
+                    )
+                )
         await dashboard_connections.broadcast(
             {
                 "type": "hardware_status",
@@ -248,6 +279,7 @@ async def keystroke_tracker_ws(
     await websocket.accept()
 
     print(f"VS Code session connected: {session_id}")
+    runtime_state.register_session(session_id)
     await dashboard_connections.broadcast(
         {
             "type": "hardware_status",
@@ -279,6 +311,7 @@ async def keystroke_tracker_ws(
                 "backspace_ratio",
                 0.0
             )
+            runtime_state.update_keystroke_metrics(session_id, kpm, backspace_ratio)
 
             # 1. Persist metrics into TimescaleDB
             await insert_keystroke_metrics(

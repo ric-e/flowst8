@@ -4,7 +4,7 @@ flowst8 is a prototype “proof of flow” system for measuring developer focus,
 
 This project is structured like a small product stack rather than a single app:
 
-- The main dashboard lives in `frontend/` (with source in `src/`).
+- The main dashboard lives in `frontend/` (with source in `frontend/src/`).
 - A Python backend under `backend/` validates and normalizes event payloads.
 - A VS Code extension under `extension/` tracks keystrokes and sends aggregates.
 - A Raspberry Pi / local sensor agent under `pi-agent/` handles camera and MQTT tasks.
@@ -46,10 +46,10 @@ This is a VS Code extension that measures editor activity and emits keystroke-ba
 
 Key files:
 - `extension/package.json` — extension manifest and commands.
-- `extension/src/extension.ts` — activates the extension, creates a session ID, and opens the WebSocket to the backend.
-- `extension/src/keystrokeTracker.ts` — buffers editor changes and emits aggregate keystrokes / backspace stats.
-- `extension/src/websockClient.ts` — websockets client with reconnect logic.
-- `extension/src/focusReaderPanel.ts` — a lightweight webview panel that can display focus data in VS Code.
+- `extension/src_ts/extension.ts` — activates the extension, creates a session ID, and opens the WebSocket to the backend.
+- `extension/src_ts/keystrokeTracker.ts` — buffers editor changes and emits aggregate keystrokes / backspace stats.
+- `extension/src_ts/websockClient.ts` — websockets client with reconnect logic.
+- `extension/src_ts/focusReaderPanel.ts` — a lightweight webview panel that can display focus data in VS Code.
 
 ### `pi-agent/`
 This folder is the local edge/IoT side of the system. It is built for a Raspberry Pi or similar local machine that can capture camera and environmental sensor signals.
@@ -65,9 +65,6 @@ This is the local infrastructure setup for the app’s supporting services.
 Files:
 - `infra/docker-compose.yml` — runs Timescale/Postgres, Redis, and Mosquitto MQTT.
 - `infra/mosquitto.conf` — broker configuration for the MQTT service.
-
-### `src/`
-This is a secondary source tree in the repo root. It mirrors the frontend source and appears to be a duplicate copy or working directory that should be considered alongside the active frontend in `frontend is a social construct/`.
 
 ### Root-level files
 - `LICENSE` — project license.
@@ -119,7 +116,7 @@ The dashboard expects websocket payloads shaped like:
 { "type": "telemetry_tick", "timestamp": "2026-09-26T14:00:00Z", "payload": { ... } }
 ```
 
-The typed payloads are defined in `src/types/telemetry.ts` and the Python schema lives in `backend/schemas/focus-event.schema.json`.
+The typed payloads are defined in `frontend/src/types/telemetry.ts` and the Python schema lives in `backend/schemas/focus-event.schema.json`.
 
 ## Current repo status
 This repo is a prototype / early integration project. Some modules are fully implemented (schema validation, demo UI, extension telemetry), while others are scaffolding or stubs intended to be expanded into a fuller pipeline (DB layer, Pi agent integration, voice responses, and full backend service routes).
