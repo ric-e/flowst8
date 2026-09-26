@@ -45,3 +45,5 @@ backend/app/key.env
 *.log
 *.tmp
 *.bak
+__pycache__/
+*.py[cod]
