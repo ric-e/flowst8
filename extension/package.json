@@ -1,0 +1,40 @@
+{
+  "name": "flow-state-assistant",
+  "displayName": "Flow State Assistant",
+  "description": "A physical desktop assistant that helps developers maintain focus.",
+  "version": "0.0.1",
+  "publisher": "your-name",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "flowAssistant.openFocusReader",
+        "title": "Flow Assistant: Open Focus Reader"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.138.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "ws": "^8.22.0"
+  }
+}
