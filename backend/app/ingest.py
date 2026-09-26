@@ -4,6 +4,10 @@ from typing import Any
 
 from jsonschema import FormatChecker, ValidationError, validators
 
+# The backend treats each incoming payload as a versioned event rather than a
+# free-form dict. This keeps validation consistent even when producers send
+# heterogeneous telemetry from different sensors or clients.
+
 SCHEMA_PATHS = {
     1: Path(__file__).resolve().parents[1] / "schemas" / "focus-event.schema.json",
 }

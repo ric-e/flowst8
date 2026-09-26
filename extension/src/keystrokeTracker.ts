@@ -9,6 +9,8 @@ const FLUSH_INTERVAL_MS = 5000;
 const PASTE_CHAR_THRESHOLD = 20;
 
 export class KeystrokeTracker implements vscode.Disposable {
+  // Aggregate editor activity over a fixed window so the backend gets a stable
+  // sample rate instead of a firehose of every keystroke event.
   private editCount = 0;
   private backspaceCount = 0;
   private windowStart = Date.now();

@@ -1,5 +1,7 @@
 import type { FlowSocketMessage, FlowState, TelemetryTickPayload, HardwareStatusPayload, InterventionPayload, SolanaBountyPayload } from '@/types/telemetry';
 
+// Demo mode generates a synthetic but realistic flow session. The state evolves
+// over time so the dashboard can be tested without a real backend or device stack.
 let sessionId = crypto.randomUUID();
 let continuousFlowSec = 0;
 let currentState: FlowState = 'warming_up';
