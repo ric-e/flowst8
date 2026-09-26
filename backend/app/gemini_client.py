@@ -16,13 +16,13 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 while running:
-    prompt = input("Enter a prompt to Gemini 2.5 Flash (or 'quit' to exit): ")
+    prompt = input("Enter a prompt to Gemini (or 'quit' to exit): ")
 
     if prompt.lower() == "quit":
         running = False
     print("\n")
     print("Thinking...")
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    response = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
     print("\n")
     print(response.text)
     print("\n")
