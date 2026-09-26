@@ -96,6 +96,13 @@ pip install -r requirements.txt
 python -m pytest tests -q
 ```
 
+Run the backend after starting the TimescaleDB service with `docker compose -f infra/docker-compose.yml up -d`:
+```bash
+cd backend/app
+uvicorn main:app --reload
+```
+The dashboard connects to `ws://localhost:8000/ws/flow/`; extension keystroke metrics, optional Pulsoid heart rate, and idle interventions are streamed there. `GEMINI_API_KEY`, `PULSOID_API_KEY`, and `ELEVENLABS_API_KEY` in `backend/app/key.env` enable the optional AI, heart-rate, and audio features.
+
 ### Infrastructure
 ```bash
 docker compose -f infra/docker-compose.yml up -d

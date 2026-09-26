@@ -8,18 +8,18 @@ env_path = Path("key.env") # Adjust if you run from outside backend/app
 load_dotenv(dotenv_path=env_path)
 
 # Match the variable name we used in your .env file
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-if not api_key:
-    raise RuntimeError("GEMINI_API_KEY is not set in key.env")
-
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
 
 async def evaluate_flow_state(prompt: str) -> str:
     """
     Sends the system context and prompt to Gemini to evaluate the user's focus.
     Uses the asynchronous client (client.aio) for FastAPI compatibility.
     """
+    if client is None:
+        return "You've been idle for a while. Take a breath, then get back to coding."
+
     try:
         # gemini-2.5-flash is the standard model for fast, low-latency text tasks
         response = await client.aio.models.generate_content(

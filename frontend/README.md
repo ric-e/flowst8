@@ -20,10 +20,10 @@ npm run dev
 
 ## Demo vs Live Mode
 
-`.env.local` ships with `NEXT_PUBLIC_DEMO_MODE=true`.
+Set `NEXT_PUBLIC_DEMO_MODE=true` in `.env.local` to use generated sample data. By default the dashboard connects to the backend.
 
 - **Demo Mode:** Gaussian-noise mock events fire via `setInterval`. No backend needed.
-- **Live Mode:** Toggle in the TopBar or set `NEXT_PUBLIC_DEMO_MODE=false`. Connects to `ws://localhost:8000/ws/flow/`.
+- **Live Mode:** Toggle in the TopBar or set `NEXT_PUBLIC_DEMO_MODE=false`. Connects to the FastAPI stream at `ws://localhost:8000/ws/flow/`.
 
 The same `dispatch()` function in `src/hooks/useFlowSocket.ts` handles both paths — no UI components are aware of the source.
 
@@ -54,8 +54,8 @@ src/
 
 | Variable | Default | Description |
 |---|---|---|
-| `NEXT_PUBLIC_DEMO_MODE` | `true` | `true` = mock, `false` = live WS |
-| `NEXT_PUBLIC_WS_URL` | `ws://localhost:8000/ws/flow/` | Django Channels endpoint |
+| `NEXT_PUBLIC_DEMO_MODE` | `false` | `true` = mock, `false` = live WS |
+| `NEXT_PUBLIC_WS_URL` | `ws://localhost:8000/ws/flow/` | FastAPI WebSocket endpoint |
 | `NEXT_PUBLIC_API_BASE` | `http://localhost:8000/api/v1` | REST cold-start endpoint |
 
 ## WebSocket Frame Contract

@@ -9,9 +9,6 @@ load_dotenv("key.env")
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
-if not ELEVENLABS_API_KEY:
-    raise RuntimeError("ELEVENLABS_API_KEY is not set in key.env")
-
 # ElevenLabs voice ID
 VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
@@ -24,6 +21,9 @@ async def generate_audio(text: str) -> str:
         str: Path to the generated MP3 file.
         Returns an empty string if generation fails.
     """
+    if not ELEVENLABS_API_KEY:
+        print("ElevenLabs audio disabled: ELEVENLABS_API_KEY is not set in key.env")
+        return ""
 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 

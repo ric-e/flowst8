@@ -1,4 +1,7 @@
+import asyncio
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import pygame
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -6,30 +9,67 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from db import init_db, close_db, insert_keystroke_metrics
 from gemini_client import evaluate_flow_state
 import elevenlabs_client
+import pulsoid_client
+
+
+class DashboardConnectionManager:
+    def __init__(self):
+        self.connections: set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.connections.discard(websocket)
+
+    async def broadcast(self, message: dict):
+        connections = tuple(self.connections)
+        results = await asyncio.gather(
+            *(websocket.send_json(message) for websocket in connections),
+            return_exceptions=True,
+        )
+        for websocket, result in zip(connections, results):
+            if isinstance(result, BaseException):
+                self.disconnect(websocket)
+
+
+dashboard_connections = DashboardConnectionManager()
+
+
+async def stream_pulsoid_heart_rate(token: str):
+    async for event in pulsoid_client.stream_heart_rate(token):
+        await dashboard_connections.broadcast(event)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Manages the application lifecycle.
-    Initializes the database and audio system on startup,
+    Initializes the database and optional heart-rate stream on startup,
     then cleans them up on shutdown.
     """
     print("Starting up Flow Assistant Backend...")
 
-    # Initialize audio playback
-    pygame.mixer.init()
-
     # Initialize database
     await init_db()
+    pulsoid_token = os.getenv("PULSOID_API_KEY")
+    heart_rate_task = (
+        asyncio.create_task(stream_pulsoid_heart_rate(pulsoid_token))
+        if pulsoid_token
+        else None
+    )
 
     yield
 
     print("Shutting down Flow Assistant Backend...")
 
-    # Stop any currently playing audio
-    pygame.mixer.music.stop()
-    pygame.mixer.quit()
+    if heart_rate_task:
+        heart_rate_task.cancel()
+        try:
+            await heart_rate_task
+        except asyncio.CancelledError:
+            pass
 
     # Close database
     await close_db()
@@ -47,6 +87,8 @@ def play_audio(filepath: str):
     """
     try:
         # Stop any previous audio
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
 
@@ -57,6 +99,17 @@ def play_audio(filepath: str):
 
     except Exception as e:
         print(f"Audio playback error: {e}")
+
+
+@app.websocket("/ws/flow/")
+async def dashboard_flow_ws(websocket: WebSocket):
+    """Stream live telemetry and interventions to dashboard clients."""
+    await dashboard_connections.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        dashboard_connections.disconnect(websocket)
 
 
 @app.websocket("/ws/keystrokes/{session_id}")
@@ -100,6 +153,14 @@ async def keystroke_tracker_ws(
                 kpm,
                 backspace_ratio
             )
+            await dashboard_connections.broadcast({
+                "type": "keystroke_metrics",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "payload": {
+                    "keystrokes_per_min": kpm,
+                    "backspace_ratio": backspace_ratio,
+                },
+            })
 
             print(
                 f"[{session_id}] Stored - "
@@ -136,6 +197,16 @@ async def keystroke_tracker_ws(
                     )
 
                     print(f"Gemini says: {text_response}")
+                    await dashboard_connections.broadcast({
+                        "type": "ai_intervention",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "payload": {
+                            "trigger_reason": "idle_threshold_exceeded",
+                            "action": "voice_prompt",
+                            "transcript": text_response,
+                            "suggest_reader_mode": False,
+                        },
+                    })
 
                 except Exception as e:
                     print(f"Gemini error: {e}")
