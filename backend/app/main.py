@@ -1,12 +1,10 @@
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from playsound import playsound
 
 from db import init_db, close_db, insert_keystroke_metrics
 from gemini_client import evaluate_flow_state
-# TODO: Import your AI modules
-# import elevenlabs_client
+# TODO: Import your elevenlabs_client
 
 
 @asynccontextmanager
