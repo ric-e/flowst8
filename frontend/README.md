@@ -56,7 +56,10 @@ src/
 |---|---|---|
 | `NEXT_PUBLIC_DEMO_MODE` | `false` | `true` = mock, `false` = live WS |
 | `NEXT_PUBLIC_WS_URL` | `ws://localhost:8000/ws/flow/` | FastAPI WebSocket endpoint |
+| `NEXT_PUBLIC_BACKEND_HTTP_URL` | `http://localhost:8000` | Backend HTTP origin used by the diagnostics health check |
 | `NEXT_PUBLIC_API_BASE` | `http://localhost:8000/api/v1` | REST cold-start endpoint |
+
+The **Backend Diagnostics** panel checks `GET /health` every 10 seconds and reports WebSocket state, the most recent stream message, latency, and connection/error logs. Configure `FRONTEND_ORIGINS` on the backend as a comma-separated list if the dashboard runs on a different origin.
 
 ## WebSocket Frame Contract
 

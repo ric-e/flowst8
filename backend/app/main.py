@@ -7,6 +7,7 @@ from typing import Any
 
 import pygame
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from .db import init_db, close_db, insert_keystroke_metrics
@@ -200,6 +201,24 @@ app = FastAPI(
     title="Flow Assistant API",
     lifespan=lifespan
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "FRONTEND_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000",
+        ).split(",")
+        if origin.strip()
+    ],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "flowst8-backend"}
 
 
 def play_audio(filepath: str):
