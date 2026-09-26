@@ -4,7 +4,7 @@ flowst8 is a prototype “proof of flow” system for measuring developer focus,
 
 This project is structured like a small product stack rather than a single app:
 
-- The main dashboard lives in `frontend is a social construct/`.
+- The main dashboard lives in `frontend/` (with source in `src/`).
 - A Python backend under `backend/` validates and normalizes event payloads.
 - A VS Code extension under `extension/` tracks keystrokes and sends aggregates.
 - A Raspberry Pi / local sensor agent under `pi-agent/` handles camera and MQTT tasks.
@@ -12,7 +12,7 @@ This project is structured like a small product stack rather than a single app:
 
 ## What each part does
 
-### `frontend is a social construct/`
+### `frontend/`
 This is the active Next.js frontend. It renders the dashboard UI and consumes stream data from either simulated demo mode or a live WebSocket.
 
 Key files:
@@ -24,7 +24,7 @@ Key files:
 - `src/types/telemetry.ts` — TypeScript contract for telemetry payloads and event messages.
 - `src/lib/mockGenerator.ts` — synthetic "live" data generator used when demo mode is enabled.
 
-Note: the repo also contains a mirrored source tree at `src/`. That appears to be a duplicate working copy of the frontend source, while the actual runnable app is the one under `frontend is a social construct/`.
+The frontend package in `frontend/` uses the shared source tree in `src/`.
 
 ### `backend/`
 This is the Python event-processing layer. It validates event schemas and contains clients for external services such as Pulsoid and Google.
@@ -79,13 +79,18 @@ The project is a focus telemetry stack: local activity data is collected by the 
 
 ## Typical local setup
 
-### Frontend
+### One-command app startup (frontend + backend)
 ```bash
-cd "frontend is a social construct"
+python main.py
+```
+This launches the FastAPI backend on `:8000` and Next.js dashboard on `:3000`.
+
+### Frontend only
+```bash
+cd frontend
 npm install
 npm run dev
 ```
-Then open http://localhost:3000.
 
 ### Backend
 ```bash
@@ -98,8 +103,7 @@ python -m pytest tests -q
 
 Run the backend after starting the TimescaleDB service with `docker compose -f infra/docker-compose.yml up -d`:
 ```bash
-cd backend/app
-uvicorn main:app --reload
+uvicorn backend.app.main:app --reload
 ```
 The dashboard connects to `ws://localhost:8000/ws/flow/`; extension keystroke metrics, optional Pulsoid heart rate, and idle interventions are streamed there. `GEMINI_API_KEY`, `PULSOID_API_KEY`, and `ELEVENLABS_API_KEY` in `backend/app/key.env` enable the optional AI, heart-rate, and audio features.
 
