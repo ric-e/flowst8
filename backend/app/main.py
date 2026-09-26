@@ -1,15 +1,23 @@
 import asyncio
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any
 
 import pygame
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from db import init_db, close_db, insert_keystroke_metrics
-from gemini_client import evaluate_flow_state
-import elevenlabs_client
-import pulsoid_client
+try:
+    from .db import init_db, close_db, insert_keystroke_metrics
+    from .gemini_client import evaluate_flow_state
+    from . import elevenlabs_client
+    from . import pulsoid_client
+except ImportError:
+    from db import init_db, close_db, insert_keystroke_metrics
+    from gemini_client import evaluate_flow_state
+    import elevenlabs_client
+    import pulsoid_client
 
 
 class DashboardConnectionManager:
@@ -37,9 +45,122 @@ class DashboardConnectionManager:
 dashboard_connections = DashboardConnectionManager()
 
 
+class FlowRuntimeState:
+    def __init__(self):
+        self.heart_rate_bpm = 72
+        self.flow_seconds_by_session: dict[str, int] = {}
+        self.last_bounty_by_session: dict[str, int] = {}
+
+    def _iso_now(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def update_heart_rate(self, bpm: int):
+        self.heart_rate_bpm = bpm
+
+    def build_telemetry_tick(
+        self,
+        session_id: str,
+        keystrokes_per_min: float,
+        backspace_ratio: float,
+    ) -> dict[str, Any]:
+        is_active = keystrokes_per_min > 0
+        if is_active:
+            self.flow_seconds_by_session[session_id] = (
+                self.flow_seconds_by_session.get(session_id, 0) + 5
+            )
+        else:
+            self.flow_seconds_by_session[session_id] = 0
+
+        flow_seconds = self.flow_seconds_by_session[session_id]
+        raw_flow_score = int(
+            35
+            + min(keystrokes_per_min, 220) * 0.28
+            - min(backspace_ratio, 1.0) * 32
+            + max(0, 95 - self.heart_rate_bpm) * 0.18
+        )
+        flow_score = max(0, min(100, raw_flow_score))
+
+        if flow_score >= 72:
+            flow_state = "in_flow"
+        elif flow_score >= 50:
+            flow_state = "warming_up"
+        elif flow_score >= 35:
+            flow_state = "fatigued"
+        else:
+            flow_state = "distracted"
+
+        payload = {
+            "session_id": session_id,
+            "source": {
+                "wearable_provider": "google_health_connect",
+                "sync_latency_ms": 180,
+            },
+            "biometrics": {
+                "heart_rate_bpm": self.heart_rate_bpm,
+                "hrv_rmssd_ms": max(18, min(95, int(75 - backspace_ratio * 40))),
+                "respiratory_rate_rpm": 15 if is_active else 12,
+                "stress_score": max(0, min(100, 100 - flow_score)),
+            },
+            "desktop": {
+                "keystroke_cpm": round(keystrokes_per_min, 1),
+                "idle_seconds": 0 if is_active else 5,
+                "gaze_confidence": 0.87 if is_active else 0.64,
+            },
+            "engine": {
+                "flow_score": flow_score,
+                "flow_state": flow_state,
+                "continuous_flow_seconds": flow_seconds,
+            },
+        }
+        return {
+            "type": "telemetry_tick",
+            "timestamp": self._iso_now(),
+            "payload": payload,
+        }
+
+    def maybe_build_bounty(self, session_id: str) -> dict[str, Any] | None:
+        flow_seconds = self.flow_seconds_by_session.get(session_id, 0)
+        if flow_seconds < 1500:
+            return None
+
+        completed_windows = flow_seconds // 1500
+        last_awarded = self.last_bounty_by_session.get(session_id, 0)
+        if completed_windows <= last_awarded:
+            return None
+
+        self.last_bounty_by_session[session_id] = completed_windows
+        return {
+            "type": "solana_bounty_claimable",
+            "timestamp": self._iso_now(),
+            "payload": {
+                "session_id": session_id,
+                "duration_minutes": completed_windows * 25,
+                "token_amount": round(completed_windows * 2.5, 3),
+                "claim_signature": uuid.uuid4().hex,
+            },
+        }
+
+
+runtime_state = FlowRuntimeState()
+
+
 async def stream_pulsoid_heart_rate(token: str):
     async for event in pulsoid_client.stream_heart_rate(token):
-        await dashboard_connections.broadcast(event)
+        bpm = event.get("data", {}).get("bpm")
+        if isinstance(bpm, (int, float)):
+            runtime_state.update_heart_rate(int(bpm))
+        await dashboard_connections.broadcast(
+            {
+                "type": "hardware_status",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "payload": {
+                    "device": "apple_health",
+                    "status": "connected",
+                    "last_sync_ago_seconds": 0,
+                    "details": "Live Pulsoid feed",
+                },
+            }
+        )
 
 
 @asynccontextmanager
@@ -127,6 +248,18 @@ async def keystroke_tracker_ws(
     await websocket.accept()
 
     print(f"VS Code session connected: {session_id}")
+    await dashboard_connections.broadcast(
+        {
+            "type": "hardware_status",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "payload": {
+                "device": "google_health_connect",
+                "status": "connected",
+                "last_sync_ago_seconds": 0,
+                "details": f"VS Code session {session_id}",
+            },
+        }
+    )
 
     # Number of consecutive 5-second intervals with zero KPM
     idle_streak = 0
@@ -154,13 +287,25 @@ async def keystroke_tracker_ws(
                 backspace_ratio
             )
             await dashboard_connections.broadcast({
-                "type": "keystroke_metrics",
+                "type": "hardware_status",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "payload": {
-                    "keystrokes_per_min": kpm,
-                    "backspace_ratio": backspace_ratio,
+                    "device": "google_health_connect",
+                    "status": "connected",
+                    "last_sync_ago_seconds": 0,
+                    "details": f"KPM {round(kpm, 1)}",
                 },
             })
+            await dashboard_connections.broadcast(
+                runtime_state.build_telemetry_tick(
+                    session_id=session_id,
+                    keystrokes_per_min=kpm,
+                    backspace_ratio=backspace_ratio,
+                )
+            )
+            bounty = runtime_state.maybe_build_bounty(session_id)
+            if bounty:
+                await dashboard_connections.broadcast(bounty)
 
             print(
                 f"[{session_id}] Stored - "
@@ -231,6 +376,18 @@ async def keystroke_tracker_ws(
         print(
             f"VS Code session disconnected: "
             f"{session_id}"
+        )
+        await dashboard_connections.broadcast(
+            {
+                "type": "hardware_status",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "payload": {
+                    "device": "google_health_connect",
+                    "status": "disconnected",
+                    "last_sync_ago_seconds": 0,
+                    "details": f"VS Code session {session_id}",
+                },
+            }
         )
 
     except Exception as e:
