@@ -11,9 +11,15 @@ let lastCPM = 120;
 let lastScore = 40;
 let idleSec = 0;
 
+function rand(): number {
+  const v = new Uint32Array(1);
+  crypto.getRandomValues(v);
+  return v[0] / 4294967296;
+}
+
 function gauss(mean: number, std: number): number {
-  const u = 1 - Math.random();
-  const v = Math.random();
+  const u = 1 - rand();
+  const v = rand();
   return mean + std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
@@ -22,7 +28,7 @@ function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min
 function nextState(score: number): FlowState {
   if (score >= 72) return 'in_flow';
   if (score >= 50) return 'warming_up';
-  if (Math.random() < 0.3) return 'distracted';
+  if (rand() < 0.3) return 'distracted';
   return 'fatigued';
 }
 
@@ -71,11 +77,11 @@ export function generateTick(): FlowSocketMessage {
 
 export function generateHardwareStatus(): FlowSocketMessage {
   const devices: HardwareStatusPayload['device'][] = ['rpi_cam','apple_health','google_health_connect','google_home'];
-  const d = devices[Math.floor(Math.random() * devices.length)];
+  const d = devices[Math.floor(rand() * devices.length)];
   const statuses: HardwareStatusPayload['status'][] = ['connected','connected','connected','degraded','disconnected'];
   const payload: HardwareStatusPayload = {
     device: d,
-    status: statuses[Math.floor(Math.random() * statuses.length)],
+    status: statuses[Math.floor(rand() * statuses.length)],
     last_sync_ago_seconds: Math.floor(gauss(8, 4)),
   };
   return { type: 'hardware_status', timestamp: new Date().toISOString(), payload };
@@ -91,8 +97,8 @@ export function generateIntervention(): FlowSocketMessage {
   const payload: InterventionPayload = {
     trigger_reason: 'idle_threshold_exceeded',
     action: 'voice_prompt',
-    transcript: transcripts[Math.floor(Math.random() * transcripts.length)],
-    suggest_reader_mode: Math.random() > 0.5,
+    transcript: transcripts[Math.floor(rand() * transcripts.length)],
+    suggest_reader_mode: rand() > 0.5,
   };
   return { type: 'ai_intervention', timestamp: new Date().toISOString(), payload };
 }
@@ -101,7 +107,7 @@ export function generateBounty(): FlowSocketMessage {
   const payload: SolanaBountyPayload = {
     session_id: sessionId,
     duration_minutes: Math.round(continuousFlowSec / 60),
-    token_amount: parseFloat((Math.random() * 2 + 0.5).toFixed(3)),
+    token_amount: parseFloat((rand() * 2 + 0.5).toFixed(3)),
     claim_signature: Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2,'0')).join('').slice(0, 44),
   };
   return { type: 'solana_bounty_claimable', timestamp: new Date().toISOString(), payload };
