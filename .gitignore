@@ -45,3 +45,4 @@ backend/app/key.env
 *.log
 *.tmp
 *.bak
+backend/app/key.env
