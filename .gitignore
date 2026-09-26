@@ -44,3 +44,4 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+backend/app/key.env
