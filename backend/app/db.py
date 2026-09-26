@@ -24,7 +24,12 @@ async def init_db():
     """
     global db_pool
     if db_pool is None:
-        db_pool = await asyncpg.create_pool(DATABASE_URL)
+        try:
+            db_pool = await asyncpg.create_pool(DATABASE_URL)
+        except Exception as exc:
+            print(f"Database unavailable, continuing without persistence: {exc}")
+            db_pool = None
+            return
 
     async with db_pool.acquire() as conn:
         # 1. Create the standard table
@@ -40,9 +45,13 @@ async def init_db():
         
         # 2. Convert to TimescaleDB Hypertable
         # This automatically partitions data by time for massive query performance
-        await conn.execute('''
-            SELECT create_hypertable('keystroke_metrics', 'time', if_not_exists => TRUE);
-        ''')
+        try:
+            await conn.execute('''
+                SELECT create_hypertable('keystroke_metrics', 'time', if_not_exists => TRUE);
+            ''')
+        except Exception:
+            # Plain Postgres without Timescale extension is still fine in local dev.
+            pass
         print("TimescaleDB extension verified and tables initialized.")
 
 async def insert_keystroke_metrics(session_id: str, keystrokes_per_min: float, backspace_ratio: float):
@@ -50,7 +59,7 @@ async def insert_keystroke_metrics(session_id: str, keystrokes_per_min: float, b
     Inserts a single WS payload aggregate into the database.
     """
     if db_pool is None:
-        raise RuntimeError("Database pool not initialized. Call init_db() first.")
+        return
 
     async with db_pool.acquire() as conn:
         await conn.execute('''

@@ -2,6 +2,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -9,16 +10,25 @@ ROOT = Path(__file__).resolve().parent
 
 
 def start_process(command: list[str], cwd: Path) -> subprocess.Popen:
-    return subprocess.Popen(command, cwd=str(cwd))
+    return subprocess.Popen(command, cwd=str(cwd), start_new_session=True)
 
 
 def terminate_processes(processes: list[subprocess.Popen]) -> None:
     for process in processes:
         if process.poll() is None:
-            process.terminate()
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
     for process in processes:
         if process.poll() is None:
-            process.wait(timeout=10)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
 
 def main() -> int:
@@ -65,11 +75,13 @@ def main() -> int:
 
     exit_code = 0
     try:
-        for process in processes:
-            code = process.wait()
-            if code != 0:
-                exit_code = code
+        while True:
+            statuses = [process.poll() for process in processes]
+            finished_codes = [code for code in statuses if code is not None]
+            if finished_codes:
+                exit_code = next((code for code in finished_codes if code != 0), 0)
                 break
+            time.sleep(0.25)
     finally:
         terminate_processes(processes)
 
