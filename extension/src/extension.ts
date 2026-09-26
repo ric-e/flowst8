@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { WebSockClient } from './websockClient';
 import { KeystrokeTracker } from './keystrokeTracker';
+import { FocusReaderPanel } from './focusReaderPanel';
 
 const DEFAULT_BACKEND_URL = 'ws://localhost:8000';
 
@@ -12,6 +13,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // extension host. The backend's GET /session/current always reflects
   // whichever session last connected, so the Pi agent picks this one up
   // automatically without any manual coordination.
+  
   const sessionId = crypto.randomUUID();
   output.appendLine(`Starting flow session ${sessionId}`);
 
@@ -25,8 +27,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const tracker = new KeystrokeTracker((payload) => wsClient.send(payload));
   context.subscriptions.push(tracker);
 
-  // TODO: register the focus reader panel command here once
-  // focusReaderPanel.ts is built (e.g. flowAssistant.openFocusReader).
+  const focusReaderCommand = vscode.commands.registerCommand(
+    'flowAssistant.openFocusReader',
+    () => {
+      FocusReaderPanel.render(context.extensionUri);
+    }
+  );
+  context.subscriptions.push(focusReaderCommand);
 }
 
 export function deactivate(): void {
