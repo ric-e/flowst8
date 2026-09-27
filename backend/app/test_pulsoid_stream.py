@@ -6,7 +6,7 @@ from pulsoid_client import to_heart_rate_event
 
 def test_valid_payload_parsing():
     """Verify standard Pulsoid JSON is parsed into the flowst8 schema accurately."""
-    mock_timestamp = 1698765432000  # Milliseconds
+    mock_timestamp = 1698765432000  # ms
     mock_raw_message = json.dumps(
         {"measured_at": mock_timestamp, "data": {"heart_rate": 72}}
     )

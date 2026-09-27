@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 
 export class FocusReaderPanel {
-  /**
-   * Track the currently panel. Only allow a single panel to exist at a time.
-   */
+
   public static currentPanel: FocusReaderPanel | undefined;
 
   public static readonly viewType = 'focusReader';
@@ -16,21 +14,21 @@ export class FocusReaderPanel {
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
 
-    // If we already have a panel, show it.
+
     if (FocusReaderPanel.currentPanel) {
       FocusReaderPanel.currentPanel._panel.reveal(column);
       return;
     }
 
-    // Otherwise, create a new panel.
+
     const panel = vscode.window.createWebviewPanel(
       FocusReaderPanel.viewType,
       'Focus Reader',
       column || vscode.ViewColumn.One,
       {
-        // Enable javascript in the webview
+
         enableScripts: true,
-        // Restrict the webview to only loading content from our extension's `media` directory (if you add one later)
+
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
       }
     );
@@ -44,15 +42,14 @@ export class FocusReaderPanel {
     // Set the webview's initial html content
     this._update();
 
-    // Listen for when the panel is disposed
-    // This happens when the user closes the panel or when the extension is deactivated
+
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
   }
 
   public dispose() {
     FocusReaderPanel.currentPanel = undefined;
 
-    // Clean up our resources
+
     this._panel.dispose();
 
     while (this._disposables.length) {
@@ -69,7 +66,7 @@ export class FocusReaderPanel {
   }
 
   private _getHtmlForWebview(webview: vscode.Webview) {
-    // Standard VS Code Webview HTML template using VS Code CSS variables for native theming
+
     return `<!DOCTYPE html>
       <html lang="en">
       <head>

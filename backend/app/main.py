@@ -201,7 +201,7 @@ async def lifespan(app: FastAPI):
     """
     print("Starting up Flow Assistant Backend...")
 
-    # Initialize database
+
     await init_db()
     pulsoid_token = os.getenv("PULSOID_API_KEY")
     heart_rate_task = (
@@ -221,7 +221,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-    # Close database
+
     await close_db()
 
 
@@ -251,7 +251,7 @@ def play_audio(filepath: str):
     Play an audio file through the local computer speakers.
     """
     try:
-        # Stop any previous audio
+
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         if pygame.mixer.music.get_busy():
@@ -306,13 +306,11 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
         }
     )
 
-    # Number of consecutive 5-second intervals with zero KPM
     idle_streak = 0
 
     try:
         while True:
 
-            # Receive incoming JSON payload from extension
             payload = await websocket.receive_json()
 
             kpm = payload.get("keystrokes_per_min", 0.0)
@@ -321,7 +319,6 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
 
             runtime_state.record_keystrokes(session_id, kpm, backspace_ratio)
 
-            # 1. Persist metrics into TimescaleDB
             await insert_keystroke_metrics(session_id, kpm, backspace_ratio)
             await dashboard_connections.broadcast(
                 {
@@ -352,18 +349,17 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
                 f"Error Ratio: {backspace_ratio}"
             )
 
-            # 2. Track distraction/idle state
             if kpm == 0:
                 idle_streak += 1
             else:
                 idle_streak = 0
 
-            # 3 consecutive 5-second intervals = 15 seconds
+
             if idle_streak == 3:
 
                 print("User appears distracted. " "Triggering Flow Agent...")
 
-                # Construct prompt for Gemini
+
                 agent_prompt = (
                     "You are a witty AI productivity assistant. "
                     "The user has stopped typing for 15 seconds. "
@@ -371,7 +367,7 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
                     "nudge to get back to coding."
                 )
 
-                # Get text response from Gemini
+
                 try:
                     text_response = await evaluate_flow_state(agent_prompt)
 
@@ -394,14 +390,14 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
                     idle_streak = 0
                     continue
 
-                # Generate audio using ElevenLabs
+
                 audio_filepath = await elevenlabs_client.generate_audio(text_response)
 
-                # Play audio through local speakers
+
                 if audio_filepath:
                     play_audio(audio_filepath)
 
-                # Reset streak so we don't spam the user
+
                 idle_streak = 0
 
     except WebSocketDisconnect:

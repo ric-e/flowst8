@@ -39,9 +39,6 @@ export class WebSockClient implements vscode.Disposable {
     this.reconnectTimer = setTimeout(() => this.connect(), RECONNECT_DELAY_MS);
   }
 
-  /** Sends one aggregate sample. Drops it silently if the socket isn't
-   * currently open — the next periodic flush from KeystrokeTracker tries
-   * again in a few seconds, so there's no queue to manage here. */
   send<T>(payload: T): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(payload));

@@ -4,12 +4,12 @@ import httpx
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from key.env
+
 load_dotenv("key.env")
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
-# ElevenLabs voice ID
+
 VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
 

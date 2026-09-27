@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-# Set up basic logging instead of bare prints for errors
+
 logging.basicConfig(level=logging.INFO)
 
 env_path = Path(__file__).resolve().with_name("key.env")
@@ -23,7 +23,7 @@ def to_heart_rate_event(raw_message: str | bytes) -> dict[str, Any] | None:
     try:
         message = json.loads(raw_message)
 
-        # Guard against unexpected payloads, keep-alives, or error messages
+
         if "data" not in message or "heart_rate" not in message.get("data", {}):
             return None
 
@@ -53,7 +53,7 @@ async def stream_heart_rate(token: str) -> AsyncGenerator[dict[str, Any], None]:
         try:
             async with websockets.connect(url) as websocket:
                 logging.info("Connected to Pulsoid WebSocket.")
-                retry_delay = 1  # Reset backoff on successful connection
+                retry_delay = 1  
 
                 async for raw_message in websocket:
                     event = to_heart_rate_event(raw_message)
@@ -68,7 +68,7 @@ async def stream_heart_rate(token: str) -> AsyncGenerator[dict[str, Any], None]:
             logging.error(f"WebSocket error: {e}. Reconnecting in {retry_delay}s...")
 
         await asyncio.sleep(retry_delay)
-        retry_delay = min(retry_delay * 2, 60)  # Cap backoff at 60 seconds
+        retry_delay = min(retry_delay * 2, 60)  
 
 
 async def main() -> None:
