@@ -5,7 +5,6 @@ import sys
 import time
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 
 
@@ -32,9 +31,9 @@ def terminate_processes(processes: list[subprocess.Popen]) -> None:
 
 
 def main() -> int:
-    backend_host = os.getenv("BACKEND_HOST", "0.0.0.0")
+    backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
     backend_port = os.getenv("BACKEND_PORT", "8000")
-    frontend_host = os.getenv("FRONTEND_HOST", "0.0.0.0")
+    frontend_host = os.getenv("FRONTEND_HOST", "127.0.0.1")
     frontend_port = os.getenv("FRONTEND_PORT", "3000")
 
     backend_cmd = [
@@ -46,6 +45,9 @@ def main() -> int:
         backend_host,
         "--port",
         backend_port,
+        "--reload",
+        "--reload-dir",
+        "backend/app",
     ]
     frontend_cmd = [
         "npm",
