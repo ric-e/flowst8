@@ -51,8 +51,6 @@ def main() -> int:
     ]
     frontend_cmd = [
         "npm",
-        "--prefix",
-        "frontend",
         "run",
         "dev",
         "--",
@@ -64,7 +62,7 @@ def main() -> int:
 
     processes = [
         start_process(backend_cmd, ROOT),
-        start_process(frontend_cmd, ROOT),
+        start_process(frontend_cmd, ROOT / "frontend"),
     ]
 
     def shutdown_handler(signum, frame):
