@@ -1,9 +1,11 @@
 import asyncio
+import time
 import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
+from pathlib import Path
 
 import pygame
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -51,6 +53,7 @@ class FlowRuntimeState:
         self.heart_rate_bpm = 72
         self.flow_seconds_by_session: dict[str, int] = {}
         self.last_bounty_by_session: dict[str, int] = {}
+        self.last_keystrokes: tuple[str, float, float, float] | None = None
 
     def _iso_now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -58,21 +61,33 @@ class FlowRuntimeState:
     def update_heart_rate(self, bpm: int):
         self.heart_rate_bpm = bpm
 
+    def record_keystrokes(self, session_id: str, kpm: float, backspace_ratio: float):
+        self.last_keystrokes = (session_id, kpm, backspace_ratio, time.monotonic())
+
+    def latest_keystrokes(self) -> tuple[str, float, float]:
+        """Last keystroke sample if under 15s old, else an idle placeholder."""
+        if self.last_keystrokes and time.monotonic() - self.last_keystrokes[3] < 15:
+            return self.last_keystrokes[:3]
+        return ("wearable", 0.0, 0.0)
+
     def build_telemetry_tick(
         self,
         session_id: str,
         keystrokes_per_min: float,
         backspace_ratio: float,
+        advance_flow: bool = True,
     ) -> dict[str, Any]:
         is_active = keystrokes_per_min > 0
-        if is_active:
-            self.flow_seconds_by_session[session_id] = (
-                self.flow_seconds_by_session.get(session_id, 0) + 5
-            )
-        else:
-            self.flow_seconds_by_session[session_id] = 0
+        if advance_flow:
+            if is_active:
+                self.flow_seconds_by_session[session_id] = (
+                    self.flow_seconds_by_session.get(session_id, 0) + 5
+                )
+            else:
+                self.flow_seconds_by_session[session_id] = 0
 
-        flow_seconds = self.flow_seconds_by_session[session_id]
+        flow_seconds = self.flow_seconds_by_session.get(session_id, 0)
+
         raw_flow_score = int(
             35
             + min(keystrokes_per_min, 220) * 0.28
@@ -93,7 +108,7 @@ class FlowRuntimeState:
         payload = {
             "session_id": session_id,
             "source": {
-                "wearable_provider": "google_health_connect",
+                "wearable_provider": "apple_health",
                 "sync_latency_ms": 180,
             },
             "biometrics": {
@@ -150,6 +165,15 @@ async def stream_pulsoid_heart_rate(token: str):
         bpm = event.get("data", {}).get("bpm")
         if isinstance(bpm, (int, float)):
             runtime_state.update_heart_rate(int(bpm))
+            session_id, kpm, backspace_ratio = runtime_state.latest_keystrokes()
+            await dashboard_connections.broadcast(
+                runtime_state.build_telemetry_tick(
+                    session_id=session_id,
+                    keystrokes_per_min=kpm,
+                    backspace_ratio=backspace_ratio,
+                    advance_flow=False,
+                )
+            )
         await dashboard_connections.broadcast(
             {
                 "type": "hardware_status",
@@ -245,18 +269,19 @@ def play_audio(filepath: str):
 async def dashboard_flow_ws(websocket: WebSocket):
     """Stream live telemetry and interventions to dashboard clients."""
     await dashboard_connections.connect(websocket)
+    print(f"Dashboard connected ({len(dashboard_connections.connections)} open)")
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         dashboard_connections.disconnect(websocket)
+        print(f"Dashboard disconnected ({len(dashboard_connections.connections)} open)")
 
 
 @app.websocket("/ws/keystrokes/{session_id}")
-async def keystroke_tracker_ws(
-    websocket: WebSocket,
-    session_id: str
-):
+async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint listening for live keystroke metrics
     from the VS Code extension.
@@ -289,32 +314,26 @@ async def keystroke_tracker_ws(
             # Receive incoming JSON payload from extension
             payload = await websocket.receive_json()
 
-            kpm = payload.get(
-                "keystrokes_per_min",
-                0.0
-            )
+            kpm = payload.get("keystrokes_per_min", 0.0)
 
-            backspace_ratio = payload.get(
-                "backspace_ratio",
-                0.0
-            )
+            backspace_ratio = payload.get("backspace_ratio", 0.0)
+
+            runtime_state.record_keystrokes(session_id, kpm, backspace_ratio)
 
             # 1. Persist metrics into TimescaleDB
-            await insert_keystroke_metrics(
-                session_id,
-                kpm,
-                backspace_ratio
+            await insert_keystroke_metrics(session_id, kpm, backspace_ratio)
+            await dashboard_connections.broadcast(
+                {
+                    "type": "hardware_status",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "payload": {
+                        "device": "google_health_connect",
+                        "status": "connected",
+                        "last_sync_ago_seconds": 0,
+                        "details": f"KPM {round(kpm, 1)}",
+                    },
+                }
             )
-            await dashboard_connections.broadcast({
-                "type": "hardware_status",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "payload": {
-                    "device": "google_health_connect",
-                    "status": "connected",
-                    "last_sync_ago_seconds": 0,
-                    "details": f"KPM {round(kpm, 1)}",
-                },
-            })
             await dashboard_connections.broadcast(
                 runtime_state.build_telemetry_tick(
                     session_id=session_id,
@@ -341,10 +360,7 @@ async def keystroke_tracker_ws(
             # 3 consecutive 5-second intervals = 15 seconds
             if idle_streak == 3:
 
-                print(
-                    "User appears distracted. "
-                    "Triggering Flow Agent..."
-                )
+                print("User appears distracted. " "Triggering Flow Agent...")
 
                 # Construct prompt for Gemini
                 agent_prompt = (
@@ -356,21 +372,21 @@ async def keystroke_tracker_ws(
 
                 # Get text response from Gemini
                 try:
-                    text_response = await evaluate_flow_state(
-                        agent_prompt
-                    )
+                    text_response = await evaluate_flow_state(agent_prompt)
 
                     print(f"Gemini says: {text_response}")
-                    await dashboard_connections.broadcast({
-                        "type": "ai_intervention",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "payload": {
-                            "trigger_reason": "idle_threshold_exceeded",
-                            "action": "voice_prompt",
-                            "transcript": text_response,
-                            "suggest_reader_mode": False,
-                        },
-                    })
+                    await dashboard_connections.broadcast(
+                        {
+                            "type": "ai_intervention",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "payload": {
+                                "trigger_reason": "idle_threshold_exceeded",
+                                "action": "voice_prompt",
+                                "transcript": text_response,
+                                "suggest_reader_mode": False,
+                            },
+                        }
+                    )
 
                 except Exception as e:
                     print(f"Gemini error: {e}")
@@ -378,11 +394,7 @@ async def keystroke_tracker_ws(
                     continue
 
                 # Generate audio using ElevenLabs
-                audio_filepath = (
-                    await elevenlabs_client.generate_audio(
-                        text_response
-                    )
-                )
+                audio_filepath = await elevenlabs_client.generate_audio(text_response)
 
                 # Play audio through local speakers
                 if audio_filepath:
@@ -392,10 +404,7 @@ async def keystroke_tracker_ws(
                 idle_streak = 0
 
     except WebSocketDisconnect:
-        print(
-            f"VS Code session disconnected: "
-            f"{session_id}"
-        )
+        print(f"VS Code session disconnected: " f"{session_id}")
         await dashboard_connections.broadcast(
             {
                 "type": "hardware_status",
@@ -411,3 +420,17 @@ async def keystroke_tracker_ws(
 
     except Exception as e:
         print(f"Error in WebSocket loop: {e}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    app_dir = Path(__file__).resolve().parent
+    uvicorn.run(
+        "main:app",
+        app_dir=str(app_dir),
+        host=os.getenv("BACKEND_HOST", "127.0.0.1"),
+        port=int(os.getenv("BACKEND_PORT", "8000")),
+        reload=True,
+        reload_dirs=[str(app_dir)],
+    )
