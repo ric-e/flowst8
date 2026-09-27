@@ -40,11 +40,24 @@ interface FlowStore {
 
 const MAX_SPARK = 120;
 
+// Everything tied to one data session. Reset on demo <-> live switch so
+// fake demo data never lingers on the live dashboard.
+const freshSession = () => ({
+  latestTick: null,
+  sparkHistory: [] as SparkPoint[],
+  hardwareMap: {} as Record<string, HardwareStatusPayload>,
+  activeIntervention: null,
+  pendingBounties: [] as SolanaBountyPayload[],
+  claimedBounties: [] as SolanaBountyPayload[],
+  eventLog: [] as EventLogEntry[],
+  sessionStartTs: Date.now(),
+});
+
 export const useFlowStore = create<FlowStore>((set, get) => ({
   isConnected: false,
   isDemoMode: process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
   setConnected: (v) => set({ isConnected: v }),
-  setDemoMode: (v) => set({ isDemoMode: v }),
+  setDemoMode: (v) => set({ isDemoMode: v, ...freshSession() }),
 
   latestTick: null,
   sparkHistory: [],

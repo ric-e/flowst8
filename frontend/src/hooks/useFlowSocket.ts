@@ -65,9 +65,13 @@ export function useFlowSocket() {
     ws.onerror = () => setConnected(false);
     ws.onmessage = (e) => {
       try { dispatch(JSON.parse(e.data) as FlowSocketMessage); }
-      catch {}
+      catch (err) { console.warn('Bad flow message', e.data, err); }
     };
 
-    return () => { ws.close(); setConnected(false); };
+    return () => {
+      ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null;
+      ws.close();
+      setConnected(false);
+    };
   }, [isDemoMode]);
 }
