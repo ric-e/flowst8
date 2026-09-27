@@ -1,14 +1,14 @@
 # flowst8
 
-flowst8 is a prototype “proof of flow” system for measuring developer focus, health signals, and desktop behavior, then turning that data into a live dashboard and intervention loop. The repo stitches together a telemetry dashboard, a Python data-validation backend, a VS Code extension, a local Pi agent, and the supporting infrastructure for MQTT, Postgres, and Redis.
+<img width="1774" height="887" alt="ChatGPT Image Sep 26, 2026, 09_25_39 PM" src="https://github.com/user-attachments/assets/56f5b5d7-c6e9-42f1-b1f9-19a0f0932604" />
+
+flowst8 is a prototype “proof of flow” system for measuring developer focus, health signals, and desktop behavior, then turning that data into a live dashboard and intervention loop. The repo stitches together a telemetry dashboard, a Python data-validation backend, and Gemini API into a powerful tool for productivity,
 
 This project is structured like a small product stack rather than a single app:
 
 - The main dashboard lives in `frontend/` (with source in `src/`).
 - A Python backend under `backend/` validates and normalizes event payloads.
 - A VS Code extension under `extension/` tracks keystrokes and sends aggregates.
-- A Raspberry Pi / local sensor agent under `pi-agent/` handles camera and MQTT tasks.
-- Infra under `infra/` provides shared services for Postgres, Redis, and MQTT.
 
 ## What each part does
 
@@ -50,14 +50,6 @@ Key files:
 - `extension/src/keystrokeTracker.ts` — buffers editor changes and emits aggregate keystrokes / backspace stats.
 - `extension/src/websockClient.ts` — websockets client with reconnect logic.
 - `extension/src/focusReaderPanel.ts` — a lightweight webview panel that can display focus data in VS Code.
-
-### `pi-agent/`
-This folder is the local edge/IoT side of the system. It is built for a Raspberry Pi or similar local machine that can capture camera and environmental sensor signals.
-
-Files:
-- `pi-agent/camera_capture.py` — camera capture logic for local visual context.
-- `pi-agent/mqtt_publisher.py` — publishes sensor or state updates to an MQTT broker.
-- `pi-agent/focus_model.py` — local inference/model logic for assessing focus from captured data.
 
 ### `infra/`
 This is the local infrastructure setup for the app’s supporting services.
