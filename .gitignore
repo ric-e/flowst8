@@ -47,4 +47,27 @@ backend/app/key.env
 *.bak
 __pycache__/
 *.py[cod]
-backend/app/key.env
+
+
+# ====================================================================
+# Dependencies & Build Output (regenerate with npm install / next dev)
+# ====================================================================
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ====================================================================
+# Python Environments & Tool Caches
+# ====================================================================
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# ====================================================================
+# Generated Audio (ElevenLabs writes one mp3 per intervention)
+# ====================================================================
+backend/app/agent_voice_*.mp3
