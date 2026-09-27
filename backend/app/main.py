@@ -1,5 +1,6 @@
 import asyncio
 import time
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -162,30 +163,33 @@ runtime_state = FlowRuntimeState()
 
 async def stream_pulsoid_heart_rate(token: str):
     async for event in pulsoid_client.stream_heart_rate(token):
-        bpm = event.get("data", {}).get("bpm")
-        if isinstance(bpm, (int, float)):
-            runtime_state.update_heart_rate(int(bpm))
-            session_id, kpm, backspace_ratio = runtime_state.latest_keystrokes()
-            await dashboard_connections.broadcast(
-                runtime_state.build_telemetry_tick(
-                    session_id=session_id,
-                    keystrokes_per_min=kpm,
-                    backspace_ratio=backspace_ratio,
-                    advance_flow=False,
+        try:
+            bpm = event.get("data", {}).get("bpm")
+            if isinstance(bpm, (int, float)):
+                runtime_state.update_heart_rate(int(bpm))
+                session_id, kpm, backspace_ratio = runtime_state.latest_keystrokes()
+                await dashboard_connections.broadcast(
+                    runtime_state.build_telemetry_tick(
+                        session_id=session_id,
+                        keystrokes_per_min=kpm,
+                        backspace_ratio=backspace_ratio,
+                        advance_flow=False,
+                    )
                 )
+            await dashboard_connections.broadcast(
+                {
+                    "type": "hardware_status",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "payload": {
+                        "device": "apple_health",
+                        "status": "connected",
+                        "last_sync_ago_seconds": 0,
+                        "details": "Live Pulsoid feed",
+                    },
+                }
             )
-        await dashboard_connections.broadcast(
-            {
-                "type": "hardware_status",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "payload": {
-                    "device": "apple_health",
-                    "status": "connected",
-                    "last_sync_ago_seconds": 0,
-                    "details": "Live Pulsoid feed",
-                },
-            }
-        )
+        except Exception:
+            logging.exception("Failed to relay Pulsoid heart-rate event")
 
 
 @asynccontextmanager
@@ -221,10 +225,7 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
-app = FastAPI(
-    title="Flow Assistant API",
-    lifespan=lifespan
-)
+app = FastAPI(title="Flow Assistant API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
