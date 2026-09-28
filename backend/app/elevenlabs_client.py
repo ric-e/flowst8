@@ -4,11 +4,9 @@ import httpx
 from pathlib import Path
 from dotenv import load_dotenv
 
-
-load_dotenv("key.env")
+load_dotenv(Path(__file__).resolve().with_name("key.env"))
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-
 
 VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
@@ -52,10 +50,7 @@ async def generate_audio(text: str) -> str:
             )
 
         if response.status_code != 200:
-            print(
-                f"ElevenLabs Error: "
-                f"{response.status_code} - {response.text}"
-            )
+            print(f"ElevenLabs Error: " f"{response.status_code} - {response.text}")
             return ""
 
         filename = f"agent_voice_{uuid.uuid4().hex[:8]}.mp3"
