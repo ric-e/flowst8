@@ -1,15 +1,17 @@
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
 import { WebSockClient } from './websockClient';
 import { KeystrokeTracker } from './keystrokeTracker';
 import { FocusReaderPanel } from './focusReaderPanel';
 
-const DEFAULT_BACKEND_URL = 'ws://localhost:8000';
+const DEFAULT_BACKEND_URL = 'ws://127.0.0.1:8000';
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Flow Assistant');
   context.subscriptions.push(output);
-  
-  const sessionId = crypto.randomUUID();
+
+
+  const sessionId = randomUUID()
   output.appendLine(`Starting flow session ${sessionId}`);
 
   const backendUrl = vscode.workspace
