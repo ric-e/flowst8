@@ -9,6 +9,7 @@ const DEVICE_LABELS: Record<string, string> = {
   apple_health: 'Apple Health',
   google_health_connect: 'Google Health',
   google_home: 'Google Home',
+  vscode: 'VS Code',
 };
 
 function HardwareRow({ hw }: { hw: HardwareStatusPayload }) {

@@ -10,7 +10,7 @@ export interface TelemetryTickPayload {
 }
 
 export interface HardwareStatusPayload {
-  device: 'rpi_cam' | 'apple_health' | 'google_health_connect' | 'google_home';
+  device: 'rpi_cam' | 'apple_health' | 'google_health_connect' | 'google_home' | 'vscode';
   status: 'connected' | 'degraded' | 'disconnected';
   last_sync_ago_seconds: number;
   details?: string;

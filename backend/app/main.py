@@ -55,6 +55,7 @@ class FlowRuntimeState:
         self.flow_seconds_by_session: dict[str, int] = {}
         self.last_bounty_by_session: dict[str, int] = {}
         self.last_keystrokes: tuple[str, float, float, float] | None = None
+        self.last_typed_at: float | None = None
 
     def _iso_now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -64,6 +65,8 @@ class FlowRuntimeState:
 
     def record_keystrokes(self, session_id: str, kpm: float, backspace_ratio: float):
         self.last_keystrokes = (session_id, kpm, backspace_ratio, time.monotonic())
+        if kpm > 0:
+            self.last_typed_at = time.monotonic()
 
     def latest_keystrokes(self) -> tuple[str, float, float]:
         """Last keystroke sample if under 15s old, else an idle placeholder."""
@@ -106,6 +109,11 @@ class FlowRuntimeState:
         else:
             flow_state = "distracted"
 
+        if is_active or self.last_typed_at is None:
+            idle_seconds = 0
+        else:
+            idle_seconds = int(time.monotonic() - self.last_typed_at)
+
         payload = {
             "session_id": session_id,
             "source": {
@@ -120,7 +128,7 @@ class FlowRuntimeState:
             },
             "desktop": {
                 "keystroke_cpm": round(keystrokes_per_min, 1),
-                "idle_seconds": 0 if is_active else 5,
+                "idle_seconds": idle_seconds,
                 "gaze_confidence": 0.87 if is_active else 0.64,
             },
             "engine": {
@@ -159,6 +167,13 @@ class FlowRuntimeState:
 
 
 runtime_state = FlowRuntimeState()
+
+# How long without typing before the voice nudge fires (seconds).
+# Override without editing code: IDLE_NUDGE_SECONDS=60 python main.py
+IDLE_NUDGE_SECONDS = int(os.getenv("IDLE_NUDGE_SECONDS", "30"))
+IDLE_NUDGE_SAMPLES = max(
+    1, IDLE_NUDGE_SECONDS // 5
+)  # extension sends one sample per 5s
 
 
 async def stream_pulsoid_heart_rate(token: str):
@@ -201,7 +216,6 @@ async def lifespan(app: FastAPI):
     """
     print("Starting up Flow Assistant Backend...")
 
-
     await init_db()
     pulsoid_token = os.getenv("PULSOID_API_KEY")
     heart_rate_task = (
@@ -220,7 +234,6 @@ async def lifespan(app: FastAPI):
             await heart_rate_task
         except asyncio.CancelledError:
             pass
-
 
     await close_db()
 
@@ -251,7 +264,6 @@ def play_audio(filepath: str):
     Play an audio file through the local computer speakers.
     """
     try:
-
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         if pygame.mixer.music.get_busy():
@@ -298,7 +310,7 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
             "type": "hardware_status",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "payload": {
-                "device": "google_health_connect",
+                "device": "vscode",
                 "status": "connected",
                 "last_sync_ago_seconds": 0,
                 "details": f"VS Code session {session_id}",
@@ -325,7 +337,7 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
                     "type": "hardware_status",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "payload": {
-                        "device": "google_health_connect",
+                        "device": "vscode",
                         "status": "connected",
                         "last_sync_ago_seconds": 0,
                         "details": f"KPM {round(kpm, 1)}",
@@ -354,19 +366,18 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
             else:
                 idle_streak = 0
 
-
-            if idle_streak == 3:
+            # Fire once when the idle stretch reaches the threshold; typing
+            # resets idle_streak to 0, which re-arms the nudge.
+            if idle_streak == IDLE_NUDGE_SAMPLES:
 
                 print("User appears distracted. " "Triggering Flow Agent...")
 
-
                 agent_prompt = (
                     "You are a witty AI productivity assistant. "
-                    "The user has stopped typing for 15 seconds. "
+                    f"The user has stopped typing for {IDLE_NUDGE_SECONDS} seconds. "
                     "Give them a very short, 1-sentence snarky "
                     "nudge to get back to coding."
                 )
-
 
                 try:
                     text_response = await evaluate_flow_state(agent_prompt)
@@ -387,18 +398,12 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
 
                 except Exception as e:
                     print(f"Gemini error: {e}")
-                    idle_streak = 0
                     continue
-
 
                 audio_filepath = await elevenlabs_client.generate_audio(text_response)
 
-
                 if audio_filepath:
                     play_audio(audio_filepath)
-
-
-                idle_streak = 0
 
     except WebSocketDisconnect:
         print(f"VS Code session disconnected: " f"{session_id}")
@@ -407,7 +412,7 @@ async def keystroke_tracker_ws(websocket: WebSocket, session_id: str):
                 "type": "hardware_status",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "payload": {
-                    "device": "google_health_connect",
+                    "device": "vscode",
                     "status": "disconnected",
                     "last_sync_ago_seconds": 0,
                     "details": f"VS Code session {session_id}",
@@ -431,3 +436,4 @@ if __name__ == "__main__":
         reload=True,
         reload_dirs=[str(app_dir)],
     )
+
