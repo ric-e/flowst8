@@ -4,6 +4,7 @@ import { MetricCell } from '@/components/primitives/MetricCell';
 import { Separator } from '@/components/primitives/Separator';
 import { scoreToColor } from '@/lib/utils';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { useEffect, useState } from 'react';
 
 export function TelemetryPanel() {
   const tick    = useFlowStore((s) => s.latestTick);
@@ -12,6 +13,35 @@ export function TelemetryPanel() {
   const d = tick?.desktop;
   const e = tick?.engine;
 
+  // Idle counter: derive "idle since" from the server's value, then count up
+  // locally every second. Only move that anchor on a real change (>1.5s off,
+  // or typing resets it), so rounding between ticks can't make it jump back.
+  const [now, setNow] = useState(() => Date.now());
+  const [idleSince, setIdleSince] = useState<number | null>(null);
+  const lastTickAt = history.length ? history[history.length - 1].t : null;
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!d || lastTickAt === null) return;
+    if (d.idle_seconds === 0) {
+      setIdleSince(null);
+      return;
+    }
+    const anchor = lastTickAt - d.idle_seconds * 1000;
+    setIdleSince((prev) =>
+      prev === null || Math.abs(anchor - prev) > 1500 ? anchor : prev,
+    );
+  }, [d, lastTickAt]);
+
+  const idleDisplay =
+    d === undefined ? '--'
+    : idleSince === null ? 0
+    : Math.max(0, Math.floor((Math.max(now, lastTickAt ?? 0) - idleSince) / 1000));
+    
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Flow score sparkline */}
@@ -59,7 +89,7 @@ export function TelemetryPanel() {
       {/* Desktop */}
       <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4">
         <MetricCell label="Keystrokes" value={d?.keystroke_cpm ?? '--'} unit="cpm" />
-        <MetricCell label="Idle" value={d?.idle_seconds ?? '--'} unit="sec" />
+        <MetricCell label="Idle" value={idleDisplay} unit="sec" />
         <MetricCell label="Gaze Conf." value={d?.gaze_confidence !== undefined ? (d.gaze_confidence * 100).toFixed(0) + '%' : '--'} />
         <MetricCell label="Flow Streak" value={e ? Math.floor(e.continuous_flow_seconds / 60) : '--'} unit="min" />
       </div>
