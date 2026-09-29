@@ -1,3 +1,0 @@
-let's keep typing in a saved file
-
-this should theoretcially start thinking that I am locking in. this is fo course not the case.
