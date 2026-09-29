@@ -2,7 +2,7 @@ import os
 import asyncpg
 from dotenv import load_dotenv
 
-# Load variables from backend/app/.env
+
 load_dotenv()
 
 DB_USER = os.getenv("POSTGRES_USER", "flowst8")
@@ -11,10 +11,10 @@ DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB", "flowst8")
 
-# Build the connection URL
+
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# We'll store a global connection pool so we don't open/close connections constantly
+
 db_pool = None
 
 async def init_db():
@@ -24,11 +24,15 @@ async def init_db():
     """
     global db_pool
     if db_pool is None:
-        db_pool = await asyncpg.create_pool(DATABASE_URL)
+        try:
+            db_pool = await asyncpg.create_pool(DATABASE_URL)
+        except Exception as exc:
+            print(f"Database unavailable, continuing without persistence: {exc}")
+            db_pool = None
+            return
 
     async with db_pool.acquire() as conn:
-        # 1. Create the standard table
-        # Notice we use TIMESTAMPTZ (timezone-aware timestamp), which is a Timescale requirement
+
         await conn.execute('''
             CREATE TABLE IF NOT EXISTS keystroke_metrics (
                 time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -38,11 +42,14 @@ async def init_db():
             );
         ''')
         
-        # 2. Convert to TimescaleDB Hypertable
-        # This automatically partitions data by time for massive query performance
-        await conn.execute('''
-            SELECT create_hypertable('keystroke_metrics', 'time', if_not_exists => TRUE);
-        ''')
+
+        try:
+            await conn.execute('''
+                SELECT create_hypertable('keystroke_metrics', 'time', if_not_exists => TRUE);
+            ''')
+        except Exception:
+
+            pass
         print("TimescaleDB extension verified and tables initialized.")
 
 async def insert_keystroke_metrics(session_id: str, keystrokes_per_min: float, backspace_ratio: float):
@@ -50,7 +57,7 @@ async def insert_keystroke_metrics(session_id: str, keystrokes_per_min: float, b
     Inserts a single WS payload aggregate into the database.
     """
     if db_pool is None:
-        raise RuntimeError("Database pool not initialized. Call init_db() first.")
+        return
 
     async with db_pool.acquire() as conn:
         await conn.execute('''

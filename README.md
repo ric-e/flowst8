@@ -1,21 +1,21 @@
 # flowst8
 
-flowst8 is a prototype “proof of flow” system for measuring developer focus, health signals, and desktop behavior, then turning that data into a live dashboard and intervention loop. The repo stitches together a telemetry dashboard, a Python data-validation backend, a VS Code extension, a local Pi agent, and the supporting infrastructure for MQTT, Postgres, and Redis.
+<img width="1774" height="887" alt="ChatGPT Image Sep 26, 2026, 09_25_39 PM" src="https://github.com/user-attachments/assets/56f5b5d7-c6e9-42f1-b1f9-19a0f0932604" />
+
+flowst8 is a prototype “proof of flow” system for measuring developer focus, health signals, and desktop behavior, then turning that data into a live dashboard and intervention loop. The repo stitches together a telemetry dashboard, a Python data-validation backend, and Gemini API into a powerful tool for productivity,
 
 ELI5:
 We built a focus tracker webapp that rewards users with currency from the blockchain.
 
 This project is structured like a small product stack rather than a single app:
 
-- The main dashboard lives in `frontend is a social construct/`.
+- The main dashboard lives in `frontend/` (with source in `src/`).
 - A Python backend under `backend/` validates and normalizes event payloads.
 - A VS Code extension under `extension/` tracks keystrokes and sends aggregates.
-- A Raspberry Pi / local sensor agent under `pi-agent/` handles camera and MQTT tasks.
-- Infra under `infra/` provides shared services for Postgres, Redis, and MQTT.
 
 ## What each part does
 
-### `frontend is a social construct/`
+### `frontend/`
 This is the active Next.js frontend. It renders the dashboard UI and consumes stream data from either simulated demo mode or a live WebSocket.
 
 Key files:
@@ -27,7 +27,7 @@ Key files:
 - `src/types/telemetry.ts` — TypeScript contract for telemetry payloads and event messages.
 - `src/lib/mockGenerator.ts` — synthetic "live" data generator used when demo mode is enabled.
 
-Note: the repo also contains a mirrored source tree at `src/`. That appears to be a duplicate working copy of the frontend source, while the actual runnable app is the one under `frontend is a social construct/`.
+The frontend package in `frontend/` uses the shared source tree in `src/`.
 
 ### `backend/`
 This is the Python event-processing layer. It validates event schemas and contains clients for external services such as Pulsoid and Google.
@@ -54,14 +54,6 @@ Key files:
 - `extension/src/websockClient.ts` — websockets client with reconnect logic.
 - `extension/src/focusReaderPanel.ts` — a lightweight webview panel that can display focus data in VS Code.
 
-### `pi-agent/`
-This folder is the local edge/IoT side of the system. It is built for a Raspberry Pi or similar local machine that can capture camera and environmental sensor signals.
-
-Files:
-- `pi-agent/camera_capture.py` — camera capture logic for local visual context.
-- `pi-agent/mqtt_publisher.py` — publishes sensor or state updates to an MQTT broker.
-- `pi-agent/focus_model.py` — local inference/model logic for assessing focus from captured data.
-
 ### `infra/`
 This is the local infrastructure setup for the app’s supporting services.
 
@@ -82,13 +74,18 @@ The project is a focus telemetry stack: local activity data is collected by the 
 
 ## Typical local setup
 
-### Frontend
+### One-command app startup (frontend + backend)
 ```bash
-cd "frontend is a social construct"
+python main.py
+```
+This launches the FastAPI backend on `:8000` and Next.js dashboard on `:3000`.
+
+### Frontend only
+```bash
+cd frontend
 npm install
 npm run dev
 ```
-Then open http://localhost:3000.
 
 ### Backend
 ```bash
@@ -98,6 +95,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python -m pytest tests -q
 ```
+
+Run the backend after starting the TimescaleDB service with `docker compose -f infra/docker-compose.yml up -d`:
+```bash
+uvicorn backend.app.main:app --reload
+```
+The dashboard connects to `ws://localhost:8000/ws/flow/`; extension keystroke metrics, optional Pulsoid heart rate, and idle interventions are streamed there. `GEMINI_API_KEY`, `PULSOID_API_KEY`, and `ELEVENLABS_API_KEY` in `backend/app/key.env` enable the optional AI, heart-rate, and audio features.
 
 ### Infrastructure
 ```bash
